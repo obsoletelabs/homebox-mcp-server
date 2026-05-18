@@ -1,0 +1,17 @@
+services:
+  mcp:
+    build: .
+    container_name: mcp_server
+    restart: unless-stopped
+    ports:
+      - "5050:8001"
+    environment:
+      - PYTHONUNBUFFERED=1
+
+      - HOMEBOX_URL=${HOMEBOX_URL}
+      - HOMEBOX_EMAIL=${HOMEBOX_EMAIL}
+      - HOMEBOX_PASSWORD=${HOMEBOX_PASSWORD}
+    volumes:
+      # Optional: mount source for live reload during dev
+      - ./src:/app
+      #[]
