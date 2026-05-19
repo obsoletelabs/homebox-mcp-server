@@ -96,10 +96,56 @@ class homebox_wrapper():
 
     def create_item(self, name: str, location_id: str, description: str = "", quantity: int = 1):
         """Create a new item in the given location."""
-
-        return self.client.items.create_item(ItemCreate(
+        summary = self.client.items.create_item(ItemCreate(
             name=name,
             description=description,
             quantity=quantity,
             locationId=location_id,
+        ))
+        # create_item returns ItemSummary (no purchase/warranty fields),
+        # so fetch the full ItemOut before returning
+        return self.client.items.get_item(str(summary.id))
+    
+    def delete_item(self, item_id: str) -> bool:
+        """Delete an item by its ID."""
+        self.client.items.delete_item(item_id)
+        return True
+    
+    def update_item(self, item_id: str, **kwargs) -> object:
+        """Update fields on an existing item by its ID."""
+        from homebox.models import ItemUpdate
+
+        item = self.client.items.get_item(item_id)
+
+        # Build the update payload from the full existing item
+        payload = ItemUpdate(
+            name=kwargs.get("name", item.name),
+            description=kwargs.get("description", item.description),
+            quantity=kwargs.get("quantity", item.quantity),
+            locationId=kwargs.get("locationId", str(item.location.id) if item.location else None),
+            insured=kwargs.get("insured", item.insured),
+            archived=kwargs.get("archived", item.archived),
+            purchasePrice=kwargs.get("purchasePrice", item.purchasePrice),
+            purchaseFrom=kwargs.get("purchaseFrom", item.purchaseFrom),
+            purchaseTime=kwargs.get("purchaseTime", item.purchaseTime),
+            warrantyExpires=kwargs.get("warrantyExpires", item.warrantyExpires),
+            warrantyDetails=kwargs.get("warrantyDetails", item.warrantyDetails),
+            serialNumber=kwargs.get("serialNumber", item.serialNumber),
+            modelNumber=kwargs.get("modelNumber", item.modelNumber),
+            manufacturer=kwargs.get("manufacturer", item.manufacturer),
+            notes=kwargs.get("notes", item.notes),
+        )
+
+        self.client.items.update_item(item_id, payload)
+        return self.client.items.get_item(item_id)
+
+
+    def create_location(self, name: str, description: str = "", parent_id: str = None) -> object:
+        """Create a new location, optionally nested under a parent."""
+        from homebox.models import LocationCreate
+
+        return self.client.locations.create_location(LocationCreate(
+            name=name,
+            description=description,
+            parentId=parent_id,
         ))

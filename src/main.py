@@ -1,6 +1,12 @@
 from os import getenv
 import json
 from dotenv import load_dotenv
+import logging
+from datetime import datetime
+
+import base64
+import io
+from PIL import Image
 
 from mcp.server.fastmcp import FastMCP
 
@@ -14,6 +20,18 @@ client = homebox_wrapper(
     getenv("HOMEBOX_EMAIL"),
     getenv("HOMEBOX_PASSWORD"),
 )
+
+
+# Set up logger (put this near the top of server.py with your other setup code)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.FileHandler("/deleted_items.log"),
+        logging.StreamHandler(),  # also prints to console
+    ]
+)
+logger = logging.getLogger(__name__)
 
 
 def format_items_for_ai(items, location_map):
@@ -158,7 +176,88 @@ def create_item(name: str, location_id: str, description: str = "", quantity: in
     )
     return format_item_for_ai(item, client.build_location_map())
 
+@mcp.tool()
+def delete_item(item_id: str) -> str:
+    """Delete an item by its ID."""
+    # Fetch details before deleting so we can log the name
+    try:
+        item = client.get_item(item_id)
+        item_name = item.name
+        item_location = client.build_location_map().get(str(item.location.id), "Unknown") if item.location else "Unknown"
+    except Exception:
+        item_name = "Unknown"
+        item_location = "Unknown"
 
+    client.delete_item(item_id)
+
+    logger.info(f"DELETED | id={item_id} | name={item_name} | location={item_location}")
+    with open("/deleted_items.log", "a") as f:
+        f.write(f"DELETED | id={item_id} | name={item_name} | location={item_location}")
+
+    return json.dumps({
+        "success": True,
+        "deleted_item_id": item_id,
+        "deleted_item_name": item_name,
+    })
+
+
+@mcp.tool()
+def update_item(
+    item_id: str,
+    name: str = None,
+    description: str = None,
+    quantity: int = None,
+    location_id: str = None,
+    insured: bool = None,
+    archived: bool = None,
+    purchase_price: float = None,
+    purchase_from: str = None,
+    purchase_date: str = None,
+    warranty_expires: str = None,
+    warranty_details: str = None,
+    serial_number: str = None,
+    model_number: str = None,
+    manufacturer: str = None,
+    notes: str = None,
+) -> str:
+    """Update any fields on an existing item. Only pass the fields you want to change."""
+    field_map = {
+        "name": name,
+        "description": description,
+        "quantity": quantity,
+        "locationId": location_id,
+        "insured": insured,
+        "archived": archived,
+        "purchasePrice": purchase_price,
+        "purchaseFrom": purchase_from,
+        "purchaseTime": purchase_date,
+        "warrantyExpires": warranty_expires,
+        "warrantyDetails": warranty_details,
+        "serialNumber": serial_number,
+        "modelNumber": model_number,
+        "manufacturer": manufacturer,
+        "notes": notes,
+    }
+
+    # Only pass fields that were explicitly provided
+    updates = {k: v for k, v in field_map.items() if v is not None}
+
+    if not updates:
+        return json.dumps({"error": "No fields provided to update."})
+
+    updated_item = client.update_item(item_id, **updates)
+    return format_item_for_ai(updated_item, client.build_location_map())
+
+
+@mcp.tool()
+def create_location(name: str, description: str = "", parent_id: str = None) -> str:
+    """Create a new location. Optionally nest it under a parent location by providing a parent_id."""
+    location = client.create_location(
+        name=name,
+        description=description,
+        parent_id=parent_id,
+    )
+    return format_location_for_ai(location, client.build_location_map())
 
 
 if __name__ == "__main__":

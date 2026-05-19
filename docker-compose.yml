@@ -14,4 +14,5 @@ services:
     volumes:
       # Optional: mount source for live reload during dev
       - ./src:/app
+      - ./deleted_items.log:/deleted_items.log
       #[]
